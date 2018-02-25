@@ -167,24 +167,3 @@ func TestTimeoutExpiration(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-func TestFlush(t *testing.T) {
-	var localCache = localcache.NewLocalCache(3600)
-	localCache.SetEvictedFunc(evictedFunc)
-	defer localCache.Flush()
-	localCache.Set("xxx", 1)
-	localCache.Set("yyy", false)
-	s := localCache.Size()
-	if s != 2 {
-		t.Errorf("err: not equal, expect: %+v, but got: %+v\n", 2, s)
-	}
-	localCache.Flush()
-	s = localCache.Size()
-	if s != 0 {
-		t.Errorf("err: not equal, expect: %+v, but got: %+v\n", 0, s)
-	}
-}
-
-func TestSize(t *testing.T) {
-	t.Skip()
-}
