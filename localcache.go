@@ -190,192 +190,122 @@ func (c *LocalCache) GetKeysEntry(keys []string) (v map[string]*ResponseEntry) {
 
 // GetBool get bool value associated by key or an error.
 func (c *LocalCache) GetBool(key string) (v bool, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			switch e.value.(type) {
-			default:
-			case bool:
-				return e.value.(bool), nil
-			}
-			return false, ErrTypeMismatch
-		}
-		if c.evicted != nil {
-			c.evicted(key, e)
-		}
-		delete(c.data, key)
-		c.stats.Entries--
-		c.stats.Expired++
-		return false, ErrKeyExpired
+	e, err := c.Get(key)
+	if err != nil {
+		return false, err
 	}
-	return false, ErrNoSuchKey
+	switch e.(type) {
+	default:
+	case bool:
+		return e.(bool), nil
+	}
+	return false, ErrTypeMismatch
 }
 
 // GetInt64 get int64 value associated by key or an error.
 func (c *LocalCache) GetInt64(key string) (v int64, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			switch e.value.(type) {
-			default:
-			case int:
-				return int64(e.value.(int)), nil
-			case int8:
-				return int64(e.value.(int8)), nil
-			case int16:
-				return int64(e.value.(int16)), nil
-			case int32:
-				return int64(e.value.(int32)), nil
-			case int64:
-				return int64(e.value.(int64)), nil
-			}
-			return 0, ErrTypeMismatch
-		}
-		if c.evicted != nil {
-			c.evicted(key, e)
-		}
-		delete(c.data, key)
-		c.stats.Entries--
-		c.stats.Expired++
-		return 0, ErrKeyExpired
+	e, err := c.Get(key)
+	if err != nil {
+		return 0, err
 	}
-	return 0, ErrNoSuchKey
+	switch e.(type) {
+	default:
+	case int:
+		return int64(e.(int)), nil
+	case int8:
+		return int64(e.(int8)), nil
+	case int16:
+		return int64(e.(int16)), nil
+	case int32:
+		return int64(e.(int32)), nil
+	case int64:
+		return int64(e.(int64)), nil
+	}
+	return 0, ErrTypeMismatch
 }
 
 // GetUint64 get uint64 value associated by key or an error.
 func (c *LocalCache) GetUint64(key string) (v uint64, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			switch e.value.(type) {
-			default:
-			case uint:
-				return uint64(e.value.(uint)), nil
-			case uint8:
-				return uint64(e.value.(uint8)), nil
-			case uint16:
-				return uint64(e.value.(uint16)), nil
-			case uint32:
-				return uint64(e.value.(uint32)), nil
-			case uint64:
-				return uint64(e.value.(uint64)), nil
-			}
-			return 0, ErrTypeMismatch
-		}
-		if c.evicted != nil {
-			c.evicted(key, e)
-		}
-		delete(c.data, key)
-		c.stats.Entries--
-		c.stats.Expired++
-		return 0, ErrKeyExpired
+	e, err := c.Get(key)
+	if err != nil {
+		return 0, err
 	}
-	return 0, ErrNoSuchKey
+	switch e.(type) {
+	default:
+	case uint:
+		return uint64(e.(uint)), nil
+	case uint8:
+		return uint64(e.(uint8)), nil
+	case uint16:
+		return uint64(e.(uint16)), nil
+	case uint32:
+		return uint64(e.(uint32)), nil
+	case uint64:
+		return uint64(e.(uint64)), nil
+	}
+	return 0, ErrTypeMismatch
 }
 
 // GetFloat64 get float64 value associated by key or an error.
 func (c *LocalCache) GetFloat64(key string) (v float64, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			switch e.value.(type) {
-			default:
-			case float32:
-				return float64(e.value.(float64)), nil
-			case float64:
-				return e.value.(float64), nil
-			}
-			return 0, ErrTypeMismatch
-		}
-		if c.evicted != nil {
-			c.evicted(key, e)
-		}
-		delete(c.data, key)
-		c.stats.Entries--
-		c.stats.Expired++
-		return 0, ErrKeyExpired
+	e, err := c.Get(key)
+	if err != nil {
+		return 0, err
 	}
-	return 0, ErrNoSuchKey
+	switch e.(type) {
+	default:
+	case float32:
+		return float64(e.(float64)), nil
+	case float64:
+		return e.(float64), nil
+	}
+	return 0, ErrTypeMismatch
 }
 
 // GetString get string value associated by key or an error.
 func (c *LocalCache) GetString(key string) (v string, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			switch e.value.(type) {
-			default:
-			case string:
-				return e.value.(string), nil
-			case []byte:
-				return string(e.value.([]byte)), nil
-			}
-			return "", ErrTypeMismatch
-		}
-		if c.evicted != nil {
-			c.evicted(key, e)
-		}
-		delete(c.data, key)
-		c.stats.Entries--
-		c.stats.Expired++
-		return "", ErrKeyExpired
+	e, err := c.Get(key)
+	if err != nil {
+		return "", err
 	}
-	return "", ErrNoSuchKey
+	switch e.(type) {
+	default:
+	case string:
+		return e.(string), nil
+	case []byte:
+		return string(e.([]byte)), nil
+	}
+	return "", ErrTypeMismatch
 }
 
 // GetByte get byte value associated by key or an error.
 func (c *LocalCache) GetByte(key string) (v byte, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			switch e.value.(type) {
-			default:
-			case byte:
-				return e.value.(byte), nil
-			case int8:
-				return byte(e.value.(int8)), nil
-			}
-			return 0, ErrTypeMismatch
-		}
-		if c.evicted != nil {
-			c.evicted(key, e)
-		}
-		delete(c.data, key)
-		c.stats.Entries--
-		c.stats.Expired++
-		return 0, ErrKeyExpired
+	e, err := c.Get(key)
+	if err != nil {
+		return 0, err
 	}
-	return 0, ErrNoSuchKey
+	switch e.(type) {
+	default:
+	case byte:
+		return e.(byte), nil
+	case int8:
+		return byte(e.(int8)), nil
+	}
+	return 0, ErrTypeMismatch
 }
 
 // GetRune get rune value associated by key or an error.
 func (c *LocalCache) GetRune(key string) (v rune, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			switch e.value.(type) {
-			default:
-			case rune:
-				return e.value.(rune), nil
-			}
-			return 0, ErrTypeMismatch
-		}
-		if c.evicted != nil {
-			c.evicted(key, e)
-		}
-		delete(c.data, key)
-		c.stats.Entries--
-		c.stats.Expired++
-		return 0, ErrKeyExpired
+	e, err := c.Get(key)
+	if err != nil {
+		return 0, err
 	}
-	return 0, ErrNoSuchKey
+	switch e.(type) {
+	default:
+	case rune:
+		return e.(rune), nil
+	}
+	return 0, ErrTypeMismatch
 }
 
 // Expire to expire a key immediately, ignore the default and left expiration.
