@@ -1,0 +1,1 @@
+# localcache is an in-memory cache store.
