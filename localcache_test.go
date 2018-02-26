@@ -1,7 +1,7 @@
 package localcache_test
 
 import (
-	"dokigo/localcache"
+	"github.com/leaxoy/localcache"
 	"log"
 	"reflect"
 	"testing"
@@ -28,12 +28,12 @@ var testCases = map[string]interface{}{
 	"rune":    '漓',
 }
 
-var evictedFunc = func(key string, entry *localcache.Entry) {
+var evictedFunc = func(key interface{}, entry *localcache.Entry) {
 	log.Printf("dump entry, key: %s, entry: %+v\n", key, entry)
 }
 
 func TestGet(t *testing.T) {
-	var localCache = localcache.NewLocalCache(3600)
+	var localCache = localcache.NewLocalCache()
 	localCache.SetEvictedFunc(evictedFunc)
 	defer localCache.Flush()
 	for key, value := range testCases {
@@ -51,11 +51,11 @@ func TestGet(t *testing.T) {
 }
 
 func TestGetExpiration(t *testing.T) {
-	var localCache = localcache.NewLocalCache(3600)
+	var localCache = localcache.NewLocalCache()
 	localCache.SetEvictedFunc(evictedFunc)
 	defer localCache.Flush()
 	localCache.Set("long", 123)
-	localCache.SetWithExpire("short", 1, 1)
+	localCache.SetWithExpire("short", 1, time.Second)
 	v, err := localCache.Get("long")
 	if err != nil {
 		t.Error(err)
@@ -85,13 +85,13 @@ longInvalid:
 	}
 shortInvalid:
 	v, err = localCache.Get("short")
-	if err != localcache.ErrKeyExpired {
+	if err != localcache.ErrExpiredKey {
 		t.Fatal(err)
 	}
 }
 
 func TestGetBool(t *testing.T) {
-	var localCache = localcache.NewLocalCache(3600)
+	var localCache = localcache.NewLocalCache()
 	localCache.SetEvictedFunc(evictedFunc)
 	defer localCache.Flush()
 	localCache.Set("f", false)
@@ -113,7 +113,7 @@ func TestGetBool(t *testing.T) {
 }
 
 func TestGetByte(t *testing.T) {
-	var localCache = localcache.NewLocalCache(3600)
+	var localCache = localcache.NewLocalCache()
 	localCache.SetEvictedFunc(evictedFunc)
 	defer localCache.Flush()
 	localCache.Set("xxx", byte('b'))
@@ -128,7 +128,7 @@ func TestGetByte(t *testing.T) {
 }
 
 func TestExpire(t *testing.T) {
-	var localCache = localcache.NewLocalCache(3600)
+	var localCache = localcache.NewLocalCache()
 	localCache.SetEvictedFunc(evictedFunc)
 	defer localCache.Flush()
 	localCache.Set("xxx", 1234)
@@ -150,20 +150,21 @@ func TestExpire(t *testing.T) {
 }
 
 func TestTimeoutExpiration(t *testing.T) {
-	var localCache = localcache.NewLocalCache(1)
+	var localCache = localcache.NewLocalCache(&localcache.CacheConfig{Expiration: time.Second})
 	localCache.SetEvictedFunc(evictedFunc)
 	defer localCache.Flush()
 	localCache.Set("xxx", 1234)
 	v, err := localCache.GetInt64("xxx")
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	if v != 1234 {
 		t.Errorf("err: not equal, expect: %+v, but got: %+v\n", 1234, v)
 	}
 	time.Sleep(time.Second)
 	_, err = localCache.GetInt64("xxx")
-	if err != localcache.ErrKeyExpired {
+	if err != localcache.ErrExpiredKey {
 		t.Error(err)
 	}
 }

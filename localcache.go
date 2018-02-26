@@ -11,15 +11,19 @@ var (
 	ErrTypeMismatch = errors.New("err: type mismatch")
 	// ErrNoSuchKey indicate key not exist.
 	ErrNoSuchKey = errors.New("err: no such key")
-	// ErrKeyExpired indicate key has expired, but has't remove from cache.
-	ErrKeyExpired = errors.New("err: key already expired")
+	// ErrExpiredKey indicate key has expired, but has't remove from cache.
+	ErrExpiredKey = errors.New("err: expired key")
 	// ErrDuplicateEvictedFunc will panic.
 	ErrDuplicateEvictedFunc = errors.New("err: re-set evicted function")
+	// ErrDuplicateKey indicate the key has already exist in cache.
+	ErrDuplicateKey = errors.New("err: duplicate key")
 )
 
 const (
 	// ExpireDuration indicate key has already expired, so set to -1.
 	ExpireDuration = time.Duration(-1)
+
+	defaultExpiration = time.Second * time.Duration(600)
 )
 
 // Entry is a container present data with expire info.
@@ -34,12 +38,22 @@ type CacheStat struct {
 	Expired int64
 }
 
+type CacheConfig struct {
+	Expiration time.Duration
+}
+
+func NewCacheConfig() *CacheConfig {
+	return &CacheConfig{
+		Expiration: defaultExpiration,
+	}
+}
+
 // LocalCache is an in-memory struct store key-value pairs.
 type LocalCache struct {
-	data       map[string]*Entry
+	data       map[interface{}]*Entry
 	mu         sync.RWMutex
 	expiration time.Duration
-	evicted    func(key string, value *Entry)
+	evicted    func(key interface{}, value *Entry)
 	stats      *CacheStat
 }
 
@@ -52,16 +66,22 @@ type ResponseEntry struct {
 var nilResponse = &ResponseEntry{false, nil}
 
 // NewLocalCache return a empty LocalCache.
-func NewLocalCache(defaultExpiration int64) *LocalCache {
+func NewLocalCache(configs ...*CacheConfig) *LocalCache {
+	var config *CacheConfig
+	if len(configs) >= 1 {
+		config = configs[len(configs)-1]
+	} else {
+		config = NewCacheConfig()
+	}
 	return &LocalCache{
-		data:       make(map[string]*Entry),
-		expiration: time.Second * time.Duration(defaultExpiration),
+		data:       make(map[interface{}]*Entry),
+		expiration: config.Expiration,
 		stats:      &CacheStat{0, 0},
 	}
 }
 
 // SetEvictedFunc set evicted func, this must be called no more once.
-func (c *LocalCache) SetEvictedFunc(f func(string, *Entry)) {
+func (c *LocalCache) SetEvictedFunc(f func(interface{}, *Entry)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.evicted != nil {
@@ -70,25 +90,42 @@ func (c *LocalCache) SetEvictedFunc(f func(string, *Entry)) {
 	c.evicted = f
 }
 
-// Set set key-value with default expiration.
-func (c *LocalCache) Set(key string, value interface{}) {
+// Add will do same as Set but return an error if key exists.
+func (c *LocalCache) Add(key interface{}, value interface{}) error {
+	return c.AddWithExpire(key, value, c.expiration)
+}
+
+// AddWithExpire will do same as SetWithExpire but return an error if key exists.
+func (c *LocalCache) AddWithExpire(key interface{}, value interface{}, duration time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.data == nil {
-		c.data = make(map[string]*Entry)
+		c.data = make(map[interface{}]*Entry)
 	}
-	c.data[key] = &Entry{
-		value:  value,
-		expire: time.Now().Add(c.expiration),
+	if e, ok := c.data[key]; ok {
+		if e.expire.IsZero() || e.expire.After(time.Now()) {
+			return ErrDuplicateKey
+		}
+	}
+	if duration <= 0 {
+		c.data[key] = &Entry{value: value, expire: time.Time{}}
+	} else {
+		c.data[key] = &Entry{value: value, expire: time.Now().Add(duration)}
 	}
 	c.stats.Entries++
+	return nil
+}
+
+// Set set key-value with default expiration.
+func (c *LocalCache) Set(key string, value interface{}) {
+	c.SetWithExpire(key, value, c.expiration)
 }
 
 // SetWithExpire set key-value with user setup expiration.
-func (c *LocalCache) SetWithExpire(key string, value interface{}, duration int64) {
+func (c *LocalCache) SetWithExpire(key interface{}, value interface{}, duration time.Duration) {
 	c.mu.Lock()
 	if c.data == nil {
-		c.data = make(map[string]*Entry)
+		c.data = make(map[interface{}]*Entry)
 	}
 	e := &Entry{
 		value: value,
@@ -96,7 +133,7 @@ func (c *LocalCache) SetWithExpire(key string, value interface{}, duration int64
 	if duration <= 0 {
 		e.expire = time.Time{}
 	} else {
-		e.expire = time.Now().Add(time.Duration(duration) * time.Second)
+		e.expire = time.Now().Add(duration)
 	}
 	c.data[key] = e
 	c.stats.Entries++
@@ -104,26 +141,13 @@ func (c *LocalCache) SetWithExpire(key string, value interface{}, duration int64
 }
 
 // Get get the value associated by a key or an error.
-func (c *LocalCache) Get(key string) (v interface{}, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			return e.value, nil
-		}
-		if c.evicted != nil {
-			c.evicted(key, e)
-		}
-		delete(c.data, key)
-		c.stats.Entries--
-		c.stats.Expired++
-		return nil, ErrKeyExpired
-	}
-	return nil, ErrNoSuchKey
+func (c *LocalCache) Get(key interface{}) (v interface{}, err error) {
+	v, _, err = c.GetWithExpire(key)
+	return
 }
 
 // GetWithExpire get the value and left life associated by a key or an error.
-func (c *LocalCache) GetWithExpire(key string) (v interface{}, expire time.Duration, err error) {
+func (c *LocalCache) GetWithExpire(key interface{}) (v interface{}, expire time.Duration, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if e, ok := c.data[key]; ok {
@@ -136,13 +160,13 @@ func (c *LocalCache) GetWithExpire(key string) (v interface{}, expire time.Durat
 		delete(c.data, key)
 		c.stats.Entries--
 		c.stats.Expired++
-		return nil, ExpireDuration, ErrKeyExpired
+		return nil, ExpireDuration, ErrExpiredKey
 	}
 	return nil, ExpireDuration, ErrNoSuchKey
 }
 
 // GetEntry get a response entry which explain usability of the value or an error.
-func (c *LocalCache) GetEntry(key string) (v *ResponseEntry, err error) {
+func (c *LocalCache) GetEntry(key interface{}) (v *ResponseEntry, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if e, ok := c.data[key]; ok {
@@ -155,14 +179,14 @@ func (c *LocalCache) GetEntry(key string) (v *ResponseEntry, err error) {
 		delete(c.data, key)
 		c.stats.Entries--
 		c.stats.Expired++
-		return nilResponse, ErrKeyExpired
+		return nilResponse, ErrExpiredKey
 	}
 	return nilResponse, ErrNoSuchKey
 }
 
 // GetKeysEntry get a map of Key-ResponseEntry which explain usability of the value.
-func (c *LocalCache) GetKeysEntry(keys []string) (v map[string]*ResponseEntry) {
-	v = make(map[string]*ResponseEntry)
+func (c *LocalCache) GetKeysEntry(keys []interface{}) (v map[interface{}]*ResponseEntry) {
+	v = make(map[interface{}]*ResponseEntry)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, key := range keys {
@@ -189,7 +213,7 @@ func (c *LocalCache) GetKeysEntry(keys []string) (v map[string]*ResponseEntry) {
 }
 
 // GetBool get bool value associated by key or an error.
-func (c *LocalCache) GetBool(key string) (v bool, err error) {
+func (c *LocalCache) GetBool(key interface{}) (v bool, err error) {
 	e, err := c.Get(key)
 	if err != nil {
 		return false, err
@@ -203,7 +227,7 @@ func (c *LocalCache) GetBool(key string) (v bool, err error) {
 }
 
 // GetInt64 get int64 value associated by key or an error.
-func (c *LocalCache) GetInt64(key string) (v int64, err error) {
+func (c *LocalCache) GetInt64(key interface{}) (v int64, err error) {
 	e, err := c.Get(key)
 	if err != nil {
 		return 0, err
@@ -225,7 +249,7 @@ func (c *LocalCache) GetInt64(key string) (v int64, err error) {
 }
 
 // GetUint64 get uint64 value associated by key or an error.
-func (c *LocalCache) GetUint64(key string) (v uint64, err error) {
+func (c *LocalCache) GetUint64(key interface{}) (v uint64, err error) {
 	e, err := c.Get(key)
 	if err != nil {
 		return 0, err
@@ -247,7 +271,7 @@ func (c *LocalCache) GetUint64(key string) (v uint64, err error) {
 }
 
 // GetFloat64 get float64 value associated by key or an error.
-func (c *LocalCache) GetFloat64(key string) (v float64, err error) {
+func (c *LocalCache) GetFloat64(key interface{}) (v float64, err error) {
 	e, err := c.Get(key)
 	if err != nil {
 		return 0, err
@@ -263,7 +287,7 @@ func (c *LocalCache) GetFloat64(key string) (v float64, err error) {
 }
 
 // GetString get string value associated by key or an error.
-func (c *LocalCache) GetString(key string) (v string, err error) {
+func (c *LocalCache) GetString(key interface{}) (v string, err error) {
 	e, err := c.Get(key)
 	if err != nil {
 		return "", err
@@ -279,7 +303,7 @@ func (c *LocalCache) GetString(key string) (v string, err error) {
 }
 
 // GetByte get byte value associated by key or an error.
-func (c *LocalCache) GetByte(key string) (v byte, err error) {
+func (c *LocalCache) GetByte(key interface{}) (v byte, err error) {
 	e, err := c.Get(key)
 	if err != nil {
 		return 0, err
@@ -295,7 +319,7 @@ func (c *LocalCache) GetByte(key string) (v byte, err error) {
 }
 
 // GetRune get rune value associated by key or an error.
-func (c *LocalCache) GetRune(key string) (v rune, err error) {
+func (c *LocalCache) GetRune(key interface{}) (v rune, err error) {
 	e, err := c.Get(key)
 	if err != nil {
 		return 0, err
@@ -309,7 +333,7 @@ func (c *LocalCache) GetRune(key string) (v rune, err error) {
 }
 
 // Expire to expire a key immediately, ignore the default and left expiration.
-func (c *LocalCache) Expire(key string) (err error) {
+func (c *LocalCache) Expire(key interface{}) (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if e, ok := c.data[key]; ok {
@@ -331,7 +355,7 @@ func (c *LocalCache) Flush() {
 			c.evicted(k, e)
 		}
 	}
-	c.data = make(map[string]*Entry)
+	c.data = make(map[interface{}]*Entry)
 	c.stats.Expired += c.stats.Entries
 	c.stats.Entries = 0
 	c.mu.Unlock()
@@ -345,7 +369,7 @@ func (c *LocalCache) Reset() {
 			c.evicted(k, e)
 		}
 	}
-	c.data = make(map[string]*Entry)
+	c.data = make(map[interface{}]*Entry)
 	c.stats = &CacheStat{0, 0}
 	c.mu.Unlock()
 }
