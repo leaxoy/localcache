@@ -1,11 +1,12 @@
 package localcache_test
 
 import (
-	"github.com/leaxoy/localcache"
 	"log"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/leaxoy/localcache"
 )
 
 var testCases = map[string]interface{}{
@@ -166,5 +167,29 @@ func TestTimeoutExpiration(t *testing.T) {
 	_, err = localCache.GetInt64("xxx")
 	if err != localcache.ErrExpiredKey {
 		t.Error(err)
+	}
+}
+
+func TestMultiSetEvictedFunc(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	defer func() {
+		if e := recover(); e != localcache.ErrDuplicateEvictedFunc {
+			t.Error(e)
+		}
+	}()
+	localCache.SetEvictedFunc(evictedFunc)
+	localCache.SetEvictedFunc(evictedFunc)
+}
+
+func TestGetString(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	defer localCache.Flush()
+	localCache.Set(1, "123")
+	v, err := localCache.GetString(1)
+	if err != nil {
+		t.Error(err)
+	}
+	if v != "123" {
+		t.Errorf("err: not equal, expect %+v, but got %+v\n", "123", v)
 	}
 }

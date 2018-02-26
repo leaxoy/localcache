@@ -117,7 +117,7 @@ func (c *LocalCache) AddWithExpire(key interface{}, value interface{}, duration 
 }
 
 // Set set key-value with default expiration.
-func (c *LocalCache) Set(key string, value interface{}) {
+func (c *LocalCache) Set(key interface{}, value interface{}) {
 	c.SetWithExpire(key, value, c.expiration)
 }
 
@@ -355,7 +355,7 @@ func (c *LocalCache) Flush() {
 			c.evicted(k, e)
 		}
 	}
-	c.data = make(map[interface{}]*Entry)
+	c.data = nil
 	c.stats.Expired += c.stats.Entries
 	c.stats.Entries = 0
 	c.mu.Unlock()
@@ -369,7 +369,7 @@ func (c *LocalCache) Reset() {
 			c.evicted(k, e)
 		}
 	}
-	c.data = make(map[interface{}]*Entry)
+	c.data = nil
 	c.stats = &CacheStat{0, 0}
 	c.mu.Unlock()
 }
