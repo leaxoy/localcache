@@ -29,7 +29,7 @@ var testCases = map[string]interface{}{
 	"rune":    '漓',
 }
 
-var evictedFunc = func(key interface{}, entry *localcache.Entry) {
+var evictedFunc = func(key interface{}, entry localcache.Entry) {
 	log.Printf("dump entry, key: %s, entry: %+v\n", key, entry)
 }
 

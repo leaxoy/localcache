@@ -29,7 +29,7 @@ const (
 // Entry is a container present data with expire info.
 type Entry struct {
 	value  interface{}
-	expire time.Time
+	expire int64
 }
 
 // CacheStat store cache stats.
@@ -50,10 +50,10 @@ func NewCacheConfig() *CacheConfig {
 
 // LocalCache is an in-memory struct store key-value pairs.
 type LocalCache struct {
-	data       map[interface{}]*Entry
+	data       map[interface{}]Entry
 	mu         sync.RWMutex
 	expiration time.Duration
-	evicted    func(key interface{}, value *Entry)
+	evicted    func(key interface{}, value Entry)
 	stats      *CacheStat
 }
 
@@ -74,20 +74,52 @@ func NewLocalCache(configs ...*CacheConfig) *LocalCache {
 		config = NewCacheConfig()
 	}
 	return &LocalCache{
-		data:       make(map[interface{}]*Entry),
+		data:       make(map[interface{}]Entry),
 		expiration: config.Expiration,
 		stats:      &CacheStat{0, 0},
 	}
 }
 
+func (c *LocalCache) expireLoop() {
+	ticker := time.Tick(time.Minute)
+	for {
+		select {
+		case <-ticker:
+			c.expireKeys()
+		}
+	}
+}
+
+func (c *LocalCache) expireKeys() {
+	c.mu.Lock()
+	for key, entry := range c.data {
+		if entry.expire == 0 || entry.expire > time.Now().UnixNano() {
+			delete(c.data, key)
+			if c.evicted != nil {
+				c.evicted(key, entry)
+			}
+		}
+	}
+	c.mu.Unlock()
+}
+
 // SetEvictedFunc set evicted func, this must be called no more once.
-func (c *LocalCache) SetEvictedFunc(f func(interface{}, *Entry)) {
+func (c *LocalCache) SetEvictedFunc(f func(interface{}, Entry)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.evicted != nil {
 		panic(ErrDuplicateEvictedFunc)
 	}
 	c.evicted = f
+}
+
+func (c *LocalCache) search(key interface{}) (entry Entry, ok bool) {
+	if entry, ok := c.data[key]; ok {
+		if entry.expire == 0 || entry.expire > time.Now().UnixNano() {
+			return entry, true
+		}
+	}
+	return
 }
 
 // Add will do same as Set but return an error if key exists.
@@ -98,21 +130,21 @@ func (c *LocalCache) Add(key interface{}, value interface{}) error {
 // AddWithExpire will do same as SetWithExpire but return an error if key exists.
 func (c *LocalCache) AddWithExpire(key interface{}, value interface{}, duration time.Duration) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.data == nil {
-		c.data = make(map[interface{}]*Entry)
+		c.data = make(map[interface{}]Entry)
 	}
-	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			return ErrDuplicateKey
-		}
+	_, ok := c.search(key)
+	if ok {
+		c.mu.Unlock()
+		return ErrDuplicateKey
 	}
-	if duration <= 0 {
-		c.data[key] = &Entry{value: value, expire: time.Time{}}
-	} else {
-		c.data[key] = &Entry{value: value, expire: time.Now().Add(duration)}
+	var e int64
+	if duration > 0 {
+		e = time.Now().Add(duration).UnixNano()
 	}
+	c.data[key] = Entry{value: value, expire: e}
 	c.stats.Entries++
+	c.mu.Unlock()
 	return nil
 }
 
@@ -125,17 +157,13 @@ func (c *LocalCache) Set(key interface{}, value interface{}) {
 func (c *LocalCache) SetWithExpire(key interface{}, value interface{}, duration time.Duration) {
 	c.mu.Lock()
 	if c.data == nil {
-		c.data = make(map[interface{}]*Entry)
+		c.data = make(map[interface{}]Entry)
 	}
-	e := &Entry{
-		value: value,
+	var e int64
+	if duration > 0 {
+		e = time.Now().Add(duration).UnixNano()
 	}
-	if duration <= 0 {
-		e.expire = time.Time{}
-	} else {
-		e.expire = time.Now().Add(duration)
-	}
-	c.data[key] = e
+	c.data[key] = Entry{value: value, expire: e}
 	c.stats.Entries++
 	c.mu.Unlock()
 }
@@ -148,11 +176,12 @@ func (c *LocalCache) Get(key interface{}) (v interface{}, err error) {
 
 // GetWithExpire get the value and left life associated by a key or an error.
 func (c *LocalCache) GetWithExpire(key interface{}) (v interface{}, expire time.Duration, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
-			return e.value, e.expire.Sub(time.Now()), nil
+		now := time.Now()
+		if e.expire == 0 || e.expire > now.UnixNano() {
+			return e.value, time.Duration(e.expire - now.UnixNano()), nil
 		}
 		if c.evicted != nil {
 			c.evicted(key, e)
@@ -170,7 +199,7 @@ func (c *LocalCache) GetEntry(key interface{}) (v *ResponseEntry, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if e, ok := c.data[key]; ok {
-		if e.expire.IsZero() || e.expire.After(time.Now()) {
+		if e.expire == 0 || e.expire > time.Now().UnixNano() {
 			return &ResponseEntry{true, e.value}, nil
 		}
 		if c.evicted != nil {
@@ -191,7 +220,7 @@ func (c *LocalCache) GetKeysEntry(keys []interface{}) (v map[interface{}]*Respon
 	defer c.mu.Unlock()
 	for _, key := range keys {
 		if e, ok := c.data[key]; ok {
-			if e.expire.IsZero() || e.expire.After(time.Now()) {
+			if e.expire == 0 || e.expire > time.Now().Unix() {
 				v[key] = &ResponseEntry{
 					Valid: true,
 					Value: e.value,
