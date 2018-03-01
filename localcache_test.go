@@ -35,7 +35,6 @@ var evictedFunc = func(key interface{}, entry *localcache.Entry) {
 
 func TestGet(t *testing.T) {
 	var localCache = localcache.NewLocalCache()
-	localCache.SetEvictedFunc(evictedFunc)
 	defer localCache.Flush()
 	for key, value := range testCases {
 		localCache.Set(key, value)
@@ -53,7 +52,6 @@ func TestGet(t *testing.T) {
 
 func TestGetExpiration(t *testing.T) {
 	var localCache = localcache.NewLocalCache()
-	localCache.SetEvictedFunc(evictedFunc)
 	defer localCache.Flush()
 	localCache.Set("long", 123)
 	localCache.SetWithExpire("short", 1, time.Second)
@@ -91,47 +89,8 @@ shortInvalid:
 	}
 }
 
-func TestGetBool(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
-	localCache.SetEvictedFunc(evictedFunc)
-	defer localCache.Flush()
-	localCache.Set("f", false)
-	localCache.Set("t", true)
-	v, err := localCache.GetBool("f")
-	if err != nil {
-		t.Error(err)
-	}
-	if v {
-		t.Errorf("err: not equal, expect: %+v, but got: %+v\n", false, v)
-	}
-	v, err = localCache.GetBool("f")
-	if err != nil {
-		t.Error(err)
-	}
-	if v {
-		t.Errorf("err: not equal, expect: %+v, but got: %+v\n", false, v)
-	}
-}
-
-func TestGetByte(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
-	localCache.SetEvictedFunc(evictedFunc)
-	defer localCache.Flush()
-	localCache.Set("xxx", byte('b'))
-	v, err := localCache.GetByte("xxx")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if v != 'b' {
-		t.Errorf("err: not equal, expect: %+v, but got %+v\n", 'b', v)
-	}
-}
-
 func TestExpire(t *testing.T) {
 	var localCache = localcache.NewLocalCache()
-	localCache.SetEvictedFunc(evictedFunc)
-	defer localCache.Flush()
 	localCache.Set("xxx", 1234)
 	v, err := localCache.GetInt64("xxx")
 	if err != nil {
@@ -152,8 +111,6 @@ func TestExpire(t *testing.T) {
 
 func TestTimeoutExpiration(t *testing.T) {
 	var localCache = localcache.NewLocalCache(&localcache.CacheConfig{Expiration: time.Second})
-	localCache.SetEvictedFunc(evictedFunc)
-	defer localCache.Flush()
 	localCache.Set("xxx", 1234)
 	v, err := localCache.GetInt64("xxx")
 	if err != nil {
@@ -170,7 +127,7 @@ func TestTimeoutExpiration(t *testing.T) {
 	}
 }
 
-func TestMultiSetEvictedFunc(t *testing.T) {
+func TestLocalCache_SetEvictedFunc(t *testing.T) {
 	var localCache = localcache.NewLocalCache()
 	defer func() {
 		if e := recover(); e != localcache.ErrDuplicateEvictedFunc {
@@ -181,9 +138,8 @@ func TestMultiSetEvictedFunc(t *testing.T) {
 	localCache.SetEvictedFunc(evictedFunc)
 }
 
-func TestGetString(t *testing.T) {
+func TestLocalCache_GetString(t *testing.T) {
 	var localCache = localcache.NewLocalCache()
-	defer localCache.Flush()
 	localCache.Set(1, "123")
 	v, err := localCache.GetString(1)
 	if err != nil {
@@ -192,4 +148,130 @@ func TestGetString(t *testing.T) {
 	if v != "123" {
 		t.Errorf("err: not equal, expect %+v, but got %+v\n", "123", v)
 	}
+}
+
+func TestLocalCache_GetByte(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	localCache.Set("xxx", byte('b'))
+	v, err := localCache.GetByte("xxx")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v != 'b' {
+		t.Errorf("err: not equal, expect: %+v, but got %+v\n", 'b', v)
+	}
+}
+
+func TestLocalCache_GetUint64(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	localCache.Add("123", uint8(9))
+	v, err := localCache.GetUint64("123")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v != uint64(9) {
+		t.Errorf("err: not equal, expect: %+v, but got %+v\n", 'b', v)
+	}
+}
+
+func TestLocalCache_GetBool(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	localCache.Set("f", false)
+	localCache.Set("t", true)
+	v, err := localCache.GetBool("f")
+	if err != nil {
+		t.Error(err)
+	}
+	if v {
+		t.Errorf("err: not equal, expect: %+v, but got: %+v\n", false, v)
+	}
+	v, err = localCache.GetBool("f")
+	if err != nil {
+		t.Error(err)
+	}
+	if v {
+		t.Errorf("err: not equal, expect: %+v, but got: %+v\n", false, v)
+	}
+}
+
+func TestLocalCache_Add(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	localCache.Add("123", 456)
+	v, err := localCache.GetInt64("123")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v != 456 {
+		t.Errorf("err: not euqal, expect: %+v, but got: %+v\n", 456, v)
+	}
+}
+
+func TestLocalCache_AddWithExpire(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	localCache.AddWithExpire("123", 456, time.Second)
+	v, err := localCache.GetInt64("123")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v != 456 {
+		t.Errorf("err: not euqal, expect: %+v, but got: %+v\n", 456, v)
+	}
+	time.Sleep(time.Second)
+	v, err = localCache.GetInt64("123")
+	if err != localcache.ErrExpiredKey {
+		t.Error(err)
+		return
+	}
+	if v != 0 {
+		t.Errorf("err: not euqal, expect: %+v, but got: %+v\n", 0, v)
+	}
+}
+
+func TestLocalCache_Reset(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	localCache.Add("123", 456)
+	localCache.Reset()
+}
+
+func TestLocalCache_Stats(t *testing.T) {
+	var stats *localcache.CacheStat
+	var localCache = localcache.NewLocalCache()
+	localCache.Add("123", 456)
+	stats = localCache.Stats()
+	if stats.Entries != 1 || stats.Expired != 0 {
+		t.Errorf("err: not equal, extires expect %+v, but got %+v, expires expect +%v, but got %+v\n", 1, stats.Entries, 0, stats.Expired)
+	}
+	localCache.AddWithExpire("456", 123, time.Second)
+	stats = localCache.Stats()
+	if stats.Entries != 2 || stats.Expired != 0 {
+		t.Errorf("err: not equal, extires expect %+v, but got %+v, expires expect +%v, but got %+v\n", 2, stats.Entries, 0, stats.Expired)
+	}
+}
+
+func TestLocalCache_GetEntry(t *testing.T) {
+	var localCache = localcache.NewLocalCache()
+	localCache.Add("xxx", false)
+	entry, err := localCache.GetEntry("xxx")
+	if err != nil {
+		t.Error(err)
+	}
+	if !entry.Valid {
+		t.Errorf("err: not valid, expect valid, but got invalid")
+	}
+	switch entry.Value.(type) {
+	case bool:
+		if entry.Value.(bool) {
+			t.Errorf("err: not equal, expect false, but got true")
+		}
+	default:
+		t.Errorf("err: typemismatch, expect bool, but got %s", reflect.TypeOf(entry.Value))
+	}
+}
+
+func TestLocalCache_GetKeysEntry(t *testing.T) {
+
 }
