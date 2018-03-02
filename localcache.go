@@ -24,6 +24,7 @@ const (
 	ExpireDuration = time.Duration(-1)
 
 	defaultExpiration = time.Second * time.Duration(600)
+	defaultExpireTick = time.Minute * time.Duration(5)
 )
 
 // Entry is a container present data with expire info.
@@ -40,11 +41,13 @@ type CacheStat struct {
 
 type CacheConfig struct {
 	Expiration time.Duration
+	ExpireTick time.Duration
 }
 
 func NewCacheConfig() *CacheConfig {
 	return &CacheConfig{
 		Expiration: defaultExpiration,
+		ExpireTick: defaultExpireTick,
 	}
 }
 
@@ -73,15 +76,17 @@ func NewLocalCache(configs ...*CacheConfig) *LocalCache {
 	} else {
 		config = NewCacheConfig()
 	}
-	return &LocalCache{
+	lc := &LocalCache{
 		data:       make(map[interface{}]Entry),
 		expiration: config.Expiration,
 		stats:      &CacheStat{0, 0},
 	}
+	go lc.expireLoop(config.ExpireTick)
+	return lc
 }
 
-func (c *LocalCache) expireLoop() {
-	ticker := time.Tick(time.Minute)
+func (c *LocalCache) expireLoop(tick time.Duration) {
+	ticker := time.Tick(tick)
 	for {
 		select {
 		case <-ticker:
@@ -384,7 +389,7 @@ func (c *LocalCache) Flush() {
 			c.evicted(k, e)
 		}
 	}
-	c.data = nil
+	c.data = make(map[interface{}]Entry)
 	c.stats.Expired += c.stats.Entries
 	c.stats.Entries = 0
 	c.mu.Unlock()
@@ -398,7 +403,7 @@ func (c *LocalCache) Reset() {
 			c.evicted(k, e)
 		}
 	}
-	c.data = nil
+	c.data = make(map[interface{}]Entry)
 	c.stats = &CacheStat{0, 0}
 	c.mu.Unlock()
 }
