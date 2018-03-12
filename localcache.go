@@ -69,11 +69,8 @@ type ResponseEntry struct {
 var nilResponse = &ResponseEntry{false, nil}
 
 // NewLocalCache return a empty LocalCache.
-func NewLocalCache(configs ...*CacheConfig) *LocalCache {
-	var config *CacheConfig
-	if len(configs) >= 1 {
-		config = configs[len(configs)-1]
-	} else {
+func NewLocalCache(config *CacheConfig) *LocalCache {
+	if config == nil {
 		config = NewCacheConfig()
 	}
 	lc := &LocalCache{

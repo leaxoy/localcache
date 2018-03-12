@@ -34,7 +34,7 @@ var evictedFunc = func(key interface{}, entry localcache.Entry) {
 }
 
 func TestGet(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	defer localCache.Flush()
 	for key, value := range testCases {
 		localCache.Set(key, value)
@@ -51,7 +51,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestGetExpiration(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	defer localCache.Flush()
 	localCache.Set("long", 123)
 	localCache.SetWithExpire("short", 1, time.Second)
@@ -90,7 +90,7 @@ shortInvalid:
 }
 
 func TestExpire(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Set("xxx", 1234)
 	v, err := localCache.GetInt64("xxx")
 	if err != nil {
@@ -128,7 +128,7 @@ func TestTimeoutExpiration(t *testing.T) {
 }
 
 func TestLocalCache_SetEvictedFunc(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	defer func() {
 		if e := recover(); e != localcache.ErrDuplicateEvictedFunc {
 			t.Error(e)
@@ -139,7 +139,7 @@ func TestLocalCache_SetEvictedFunc(t *testing.T) {
 }
 
 func TestLocalCache_GetString(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Set(1, "123")
 	v, err := localCache.GetString(1)
 	if err != nil {
@@ -151,7 +151,7 @@ func TestLocalCache_GetString(t *testing.T) {
 }
 
 func TestLocalCache_GetByte(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Set("xxx", byte('b'))
 	v, err := localCache.GetByte("xxx")
 	if err != nil {
@@ -164,7 +164,7 @@ func TestLocalCache_GetByte(t *testing.T) {
 }
 
 func TestLocalCache_GetUint64(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Add("123", uint8(9))
 	v, err := localCache.GetUint64("123")
 	if err != nil {
@@ -177,7 +177,7 @@ func TestLocalCache_GetUint64(t *testing.T) {
 }
 
 func TestLocalCache_GetBool(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Set("f", false)
 	localCache.Set("t", true)
 	v, err := localCache.GetBool("f")
@@ -197,7 +197,7 @@ func TestLocalCache_GetBool(t *testing.T) {
 }
 
 func TestLocalCache_Add(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Add("123", 456)
 	v, err := localCache.GetInt64("123")
 	if err != nil {
@@ -210,7 +210,7 @@ func TestLocalCache_Add(t *testing.T) {
 }
 
 func TestLocalCache_AddWithExpire(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.AddWithExpire("123", 456, time.Second)
 	v, err := localCache.GetInt64("123")
 	if err != nil {
@@ -232,14 +232,14 @@ func TestLocalCache_AddWithExpire(t *testing.T) {
 }
 
 func TestLocalCache_Reset(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Add("123", 456)
 	localCache.Reset()
 }
 
 func TestLocalCache_Stats(t *testing.T) {
 	var stats *localcache.CacheStat
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Add("123", 456)
 	stats = localCache.Stats()
 	if stats.Entries != 1 || stats.Expired != 0 {
@@ -253,7 +253,7 @@ func TestLocalCache_Stats(t *testing.T) {
 }
 
 func TestLocalCache_GetEntry(t *testing.T) {
-	var localCache = localcache.NewLocalCache()
+	var localCache = localcache.NewLocalCache(nil)
 	localCache.Add("xxx", false)
 	entry, err := localCache.GetEntry("xxx")
 	if err != nil {
