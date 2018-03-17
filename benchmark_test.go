@@ -103,7 +103,7 @@ func BenchmarkStdMapInterfaceStructSet(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		mu.Lock()
 		m[i] = entry{
-			value: i,
+			value: 1,
 			valid: false,
 		}
 		mu.Unlock()
@@ -111,17 +111,17 @@ func BenchmarkStdMapInterfaceStructSet(b *testing.B) {
 }
 
 func BenchmarkLocalCache_Add(b *testing.B) {
-	localCache := localcache.NewLocalCache()
+	localCache := localcache.NewLocalCache(nil)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		localCache.Add(i, i)
+		localCache.Add("bar", i)
 	}
 }
 
 func BenchmarkLocalCache_Set(b *testing.B) {
-	localCache := localcache.NewLocalCache()
+	localCache := localcache.NewLocalCache(nil)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		localCache.Set(i, i)
+		localCache.Set("bar", i)
 	}
 }

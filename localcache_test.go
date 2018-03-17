@@ -29,7 +29,7 @@ var testCases = map[string]interface{}{
 	"rune":    '漓',
 }
 
-var evictedFunc = func(key interface{}, entry localcache.Entry) {
+var evictedFunc = func(key localcache.Key, entry localcache.Entry) {
 	log.Printf("dump entry, key: %s, entry: %+v\n", key, entry)
 }
 
@@ -37,10 +37,10 @@ func TestGet(t *testing.T) {
 	var localCache = localcache.NewLocalCache(nil)
 	defer localCache.Flush()
 	for key, value := range testCases {
-		localCache.Set(key, value)
+		localCache.Set(localcache.Key(key), value)
 	}
 	for key, value := range testCases {
-		v, err := localCache.Get(key)
+		v, err := localCache.Get(localcache.Key(key))
 		if err != nil {
 			t.Error(err)
 		}
@@ -140,8 +140,8 @@ func TestLocalCache_SetEvictedFunc(t *testing.T) {
 
 func TestLocalCache_GetString(t *testing.T) {
 	var localCache = localcache.NewLocalCache(nil)
-	localCache.Set(1, "123")
-	v, err := localCache.GetString(1)
+	localCache.Set("1", "123")
+	v, err := localCache.GetString("1")
 	if err != nil {
 		t.Error(err)
 	}
